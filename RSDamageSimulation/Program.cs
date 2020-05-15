@@ -11,7 +11,6 @@ namespace RS_Damage
 {
    class Program
    {
-      //Issues:
       static void Main(string[] args)
       {
          while (true)
@@ -275,6 +274,7 @@ namespace RS_Damage
       public bool DealsDoubleDamageAgainstStunned;
       public bool IncreasesDamageOfNextHit;
       public bool AddsCritChanceToNextHit;
+      public bool LosslessAutoAttackExceptAfterCombos;   // Abilities like detonate
 
       public int StunOrBindDuration;   // Duration of stuns or binds in ticks
       public int WalkMultiplier;
@@ -336,6 +336,7 @@ namespace RS_Damage
       private int OverkillCooldownRemaining;
       private int OverkillTicksRemaining;
       private int StunnedTicksRemaining;
+      private bool AutoAttackQueued;
 
       public bool Logging;
 
@@ -356,7 +357,7 @@ namespace RS_Damage
 
             if (a.Type == AbilityType.Ultimate && Adrenaline < 100) continue;
 
-            if (a.Type == AbilityType.Threshold && SunshineTicksRemaining <= 0 && BuildsToUltBeforeUsingThresholdsIfAvailable && UltAvailableOrShouldBuild()) continue;
+            if (a.Type == AbilityType.Threshold && SunshineTicksRemaining <= 0 && BuildsToUltBeforeUsingThresholdsIfAvailable && UltAvailableOrShouldBuild()) continue; // The check for SunshineTicksRemaining <= 0 should be unnecessary, but I left it in anyway
 
             double maximumDamage = a.MaximumDamage;
             double minimumDamage = a.MinimumDamage;
@@ -421,7 +422,9 @@ namespace RS_Damage
                maximumDamage = (a.DealsDoubleDamageAgainstStunned && StunnedTicksRemaining > 0 ? 2 : 1) * (a.IsBleed ? 1 : 1 + DamageIncreaseFromPrayer / 100) * (SunshineTicksRemaining > 0 && !a.IsBleed ? 1.5 : 1) * maximumDamage * AbilityDamage / 100;
             }
 
-            if (averageDamage > ChosenAbilityAverageDamage)
+            double currentAverageDamagePerTick = averageDamage / (a.Duration == 0 ? 3 : a.Duration);
+            double chosenAverageDamagePerTick = ChosenAbility == null ? 0 : ChosenAbilityAverageDamage / (ChosenAbility.Duration == 0 ? 3 : ChosenAbility.Duration);
+            if (currentAverageDamagePerTick > chosenAverageDamagePerTick)
             {
                ChosenAbility = a;
                ChosenAbilityAverageDamage = averageDamage;
@@ -450,11 +453,11 @@ namespace RS_Damage
          {
             double damage = 0;
 
-            // Forced crits
             if (ChosenAbility.IsBleed || ChosenAbility.Type == AbilityType.Ultimate)
             {
                damage = ChosenAbilityAverageDamage;
             }
+            // Forced crits
             else
             {
                if (ChosenAbility.NumberOfHits == 0) ChosenAbility.NumberOfHits = 1;
@@ -499,7 +502,34 @@ namespace RS_Damage
 
             AbilityCooldown = ChosenAbility.Duration == 0 ? 3 : ChosenAbility.Duration;
 
-            if (!AlwaysFlanks) StunnedTicksRemaining = ChosenAbility.StunOrBindDuration;
+            if (Logging)
+            {
+               Console.WriteLine($"  Used {ChosenAbility.Name}" + $" for {LastAbilityDamage} damage");
+
+               if (!UsedAbilities[UsedAbilities.Count - 1].IsBleed && UsedAbilities[UsedAbilities.Count - 1].Type != AbilityType.Ultimate)
+               {
+                  Console.Write($"  {numBitingProcs} Biting procs on {ChosenAbility.Name}");
+                  if (UsedAbilities.Count > 1 && UsedAbilities[UsedAbilities.Count - 2] != null && UsedAbilities[UsedAbilities.Count - 2].AddsCritChanceToNextHit)
+                     Console.Write($", {numPrevAbilityCritProcs} forced crits from {UsedAbilities[UsedAbilities.Count - 2].Name}");
+                  if (ChosenAbility.AddsCritChanceToNextHit) Console.Write($", {numCurrAbilityCritProcs} forced crits from current ability");
+                  Console.WriteLine();
+               }
+            }
+
+            if (!AlwaysFlanks && ChosenAbility.StunOrBindDuration > 0)
+            {
+               StunnedTicksRemaining = ChosenAbility.StunOrBindDuration;
+
+               if (Logging) Console.WriteLine($"  Target stunned or bound for {ChosenAbility.StunOrBindDuration} ticks");
+            }
+
+            if(ChosenAbility.LosslessAutoAttackExceptAfterCombos && (UsedAbilities.Count < 2 || (UsedAbilities[UsedAbilities.Count - 2] != null && !UsedAbilities[UsedAbilities.Count - 2].IsCombo)))
+            {
+               AutoAttackQueued = true;
+
+               if (Logging) Console.WriteLine("  AutoAttack queued");
+
+            }
 
             switch (ChosenAbility.Type)
             {
@@ -551,20 +581,18 @@ namespace RS_Damage
          }
 
          if (ChosenAbility.Type == AbilityType.Ultimate) SunshineTicksRemaining = AlwaysUsesPlantedFeet ? 63 : 50;
+      }
 
-         if (Logging)
+      private bool UltAvailable()
+      {
+         foreach (Ability a in Abilities)
          {
-            if (!UsedAbilities[UsedAbilities.Count - 1].IsBleed && UsedAbilities[UsedAbilities.Count - 1].Type != AbilityType.Ultimate)
-            {
-               Console.Write($"  {numBitingProcs} Biting procs");
-               if (UsedAbilities.Count > 1 && UsedAbilities[UsedAbilities.Count - 2] != null && UsedAbilities[UsedAbilities.Count - 2].AddsCritChanceToNextHit)
-                  Console.Write($", {numPrevAbilityCritProcs} forced crits from {UsedAbilities[UsedAbilities.Count - 2].Name}");
-               if (ChosenAbility.AddsCritChanceToNextHit) Console.Write($", {numCurrAbilityCritProcs} forced crits from current ability");
-               Console.WriteLine();
-            }
+            if (a.Type != AbilityType.Ultimate) continue;
 
-            Console.WriteLine($"  Used {ChosenAbility.Name}" + $" for {LastAbilityDamage} damage");
+            if (a.CooldownRemaining <= 0) return true;
          }
+
+         return false;
       }
 
       private bool UltAvailableOrShouldBuild()
@@ -633,35 +661,50 @@ namespace RS_Damage
 
             if (CracklingRank > 0 && CracklingCooldown == 0)
             {
-               DamageDealt += 0.5 * CracklingRank * AbilityDamage;
+               double cracklingDamage = 0.5 * CracklingRank * AbilityDamage;
+               DamageDealt += cracklingDamage;
 
-               if (Logging) Console.WriteLine($"  Crackling caused {0.5 * CracklingRank * AbilityDamage} damage");
+               if (Logging) Console.WriteLine($"  Crackling caused {cracklingDamage} damage");
                CracklingCooldown = 100;
             }
 
             if (AftershockRank > 0 && DamageDealt - LastAftershockTriggerDamage > 50000)
             {
+               double aftershockDamage = 0.318 * AftershockRank * AbilityDamage;
+               DamageDealt += aftershockDamage;
+
                LastAftershockTriggerDamage = DamageDealt;
 
-               DamageDealt += 0.318 * AftershockRank * AbilityDamage;
-
-               if (Logging) Console.WriteLine($"  Aftershock caused {0.318 * AftershockRank * AbilityDamage} damage");
+               if (Logging) Console.WriteLine($"  Aftershock caused {aftershockDamage} damage");
             }
 
             if (AbilityCooldown == 0)
             {
                // 4TAA
-               if (UsedAbilities.Count > 0 && UsedAbilities[UsedAbilities.Count - 1] != null && UsedAbilities[UsedAbilities.Count - 1].WeaponReq != WeaponRequirement.TwoHand && !UsedAbilities[UsedAbilities.Count - 1].IsCombo &&
-                  (UsedAbilities.Count < 2 || UsedAbilities[UsedAbilities.Count - 2] != null))
+               if (UsedAbilities.Count > 0 && UsedAbilities[UsedAbilities.Count - 1] != null &&       // Last ability is not an AutoAttack
+                   UsedAbilities[UsedAbilities.Count - 1].WeaponReq != WeaponRequirement.TwoHand &&   // Last ability can be fired with DualWield
+                  !UsedAbilities[UsedAbilities.Count - 1].IsCombo &&                                  // Last ability is not a combo attack
+                  (UsedAbilities.Count < 2 || UsedAbilities[UsedAbilities.Count - 2] != null) &&      // Last ability was not fired with an AutoAttack
+                  !UltAvailable() &&                                                                  // Ultimate is not available (should cast it immediately, since it comes with a free AutoAttack)
+                  !AutoAttackQueued)                                                                  // AutoAttack is not already queued
                {
-                  DoAutoAttack();
+                  AutoAttackQueued = true;
+
+                  if (Logging) Console.WriteLine("  AutoAttack queued");
                }
                else // Ability
                {
+                  if(AutoAttackQueued)
+                  {
+                     DoAutoAttack();
+
+                     AutoAttackQueued = false;
+                  }
+
                   UseStrongestAbilityAvailable();
 
-                  // Free AutoAttack with Ults
-                  if (UsedAbilities[UsedAbilities.Count - 1].Type == AbilityType.Ultimate)
+                  // Free AutoAttack with Ults, unless AutoAttack was fired before Ult
+                  if (UsedAbilities[UsedAbilities.Count - 1].Type == AbilityType.Ultimate && UsedAbilities[UsedAbilities.Count - 1] != null)
                   {
                      DoAutoAttack();
                   }
@@ -727,9 +770,12 @@ namespace RS_Damage
          maximumDamage -= (0.01 * EquilibriumRank * WeaponDamage);
          minimumDamage += (0.03 * EquilibriumRank * WeaponDamage);
 
+         bool bitingProc = false;
          if (r.Next(99) < BitingRank * 2)
          {
             minimumDamage = 0.95 * (maximumDamage - minimumDamage) + minimumDamage;
+
+            bitingProc = true;
          }
 
          averageDamage = (maximumDamage + minimumDamage) / 2;
@@ -744,7 +790,12 @@ namespace RS_Damage
 
          if (Adrenaline > 100) Adrenaline = 100;
 
-         if (Logging) Console.WriteLine($"  Used AutoAttack" + $" for {damage} damage");
+         if (Logging)
+         {
+            Console.WriteLine($"  Used AutoAttack" + $" for {damage} damage");
+
+            if (bitingProc) Console.WriteLine("  Biting proc on AutoAttack");
+         }
       }
 
       private void AddMagicAbilities()
@@ -936,7 +987,7 @@ namespace RS_Damage
             MaximumDamage = 752,
             MinimumDamage = 752 * 0.2,
 
-            Duration = 6,
+            Duration = 7,
 
             StunOrBindDuration = 6,
 
@@ -957,7 +1008,9 @@ namespace RS_Damage
 
             Cooldown = 50,
 
-            Type = AbilityType.Threshold
+            Type = AbilityType.Threshold,
+
+            LosslessAutoAttackExceptAfterCombos = true
          });
 
          // Smoke Tendrils
