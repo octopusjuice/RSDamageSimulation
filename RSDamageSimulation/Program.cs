@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace RS_Damage
 {
@@ -67,12 +64,11 @@ namespace RS_Damage
             Console.WriteLine($"------Average damage: {averageDamage}");
 
             Console.WriteLine();
-            Console.Write("Press 'o' to open output and exit. Press any key to run again.");
+            Console.Write("Press 'o' to open output. Press any key to run again.");
 
             if (Console.ReadKey().Key == ConsoleKey.O)
             {
                Process.Start("Output.txt");
-               return;
             }
 
             Console.WriteLine();
