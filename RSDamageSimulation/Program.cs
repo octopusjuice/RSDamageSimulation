@@ -33,6 +33,8 @@ namespace RS_Damage
                InvigoratingRank = 4,
                PreciseRank = 6,
                EquilibriumRank = 2,
+               PreciseRankWithFlanking = 6,
+               EquilibriumRankWithFlanking = 1,
                LungingRank = 4,
                FlankingRank = 4,
                RelentlessRank = 5,
@@ -172,6 +174,16 @@ namespace RS_Damage
                if (!string.IsNullOrWhiteSpace(line)) c.EquilibriumRank = int.Parse(line);
 
                Console.WriteLine();
+               Console.Write("PreciseRankWithFlanking: ");
+               line = "" + Console.ReadKey().KeyChar;
+               if (!string.IsNullOrWhiteSpace(line)) c.PreciseRankWithFlanking = int.Parse(line);
+
+               Console.WriteLine();
+               Console.Write("EquilibriumRankWithFlanking: ");
+               line = "" + Console.ReadKey().KeyChar;
+               if (!string.IsNullOrWhiteSpace(line)) c.EquilibriumRankWithFlanking = int.Parse(line);
+
+               Console.WriteLine();
                Console.Write("LungingRank: ");
                line = "" + Console.ReadKey().KeyChar;
                if (!string.IsNullOrWhiteSpace(line)) c.LungingRank = int.Parse(line);
@@ -229,6 +241,8 @@ namespace RS_Damage
                c.InvigoratingRank = int.Parse(Console.ReadLine());
                c.PreciseRank = int.Parse(Console.ReadLine());
                c.EquilibriumRank = int.Parse(Console.ReadLine());
+               c.PreciseRankWithFlanking = int.Parse(Console.ReadLine());
+               c.EquilibriumRankWithFlanking = int.Parse(Console.ReadLine());
                c.LungingRank = int.Parse(Console.ReadLine());
                c.FlankingRank = int.Parse(Console.ReadLine());
                c.RelentlessRank = int.Parse(Console.ReadLine());
@@ -316,6 +330,8 @@ namespace RS_Damage
       public int InvigoratingRank;
       public int PreciseRank;
       public int EquilibriumRank;
+      public int EquilibriumRankWithFlanking;
+      public int PreciseRankWithFlanking;
       public int LungingRank;
       public int FlankingRank;
       public int RelentlessRank;
@@ -367,12 +383,15 @@ namespace RS_Damage
             // Precise/Equilibrium
             else if (!a.IsBleed)
             {
-               minimumDamage += PreciseRank * 0.015 * a.MaximumDamage;
+               int pRank = (a.IsAffectedByFlanking && AlwaysFlanks) ? PreciseRankWithFlanking : PreciseRank;
+               int eRank = (a.IsAffectedByFlanking && AlwaysFlanks) ? EquilibriumRankWithFlanking : EquilibriumRank;
+
+               minimumDamage += pRank * 0.015 * a.MaximumDamage;
 
                double damageRange = a.MaximumDamage - a.MinimumDamage;
 
-               maximumDamage -= (0.01 * EquilibriumRank * damageRange);
-               minimumDamage += (0.03 * EquilibriumRank * damageRange);
+               maximumDamage -= (0.01 * eRank * damageRange);
+               minimumDamage += (0.03 * eRank * damageRange);
 
                // Flanking
                if (a.IsAffectedByFlanking && AlwaysFlanks)
