@@ -581,6 +581,8 @@ namespace RS_Damage
 
       private bool UltAvailable()
       {
+         if (Adrenaline < 100) return false;
+
          foreach (Ability a in Abilities)
          {
             if (a.Type != AbilityType.Ultimate) continue;
@@ -646,7 +648,7 @@ namespace RS_Damage
                if (Logging) Console.WriteLine("  (ASR on cooldown)");
             }
 
-            if (UsedAbilities.Count > 1 && UsedAbilities[UsedAbilities.Count - 2] != null && UsedAbilities[UsedAbilities.Count - 2].Type == AbilityType.Ultimate && UsesOverkillAfterUltIfAvailable && OverkillCooldownRemaining == 0)
+            if (UsedAbilities.Count > 0 && UsedAbilities[UsedAbilities.Count - 1] != null && UsedAbilities[UsedAbilities.Count - 1].Type == AbilityType.Ultimate && UsesOverkillAfterUltIfAvailable && OverkillCooldownRemaining == 0)
             {
                // Drink overkill
                OverkillTicksRemaining = 10;
@@ -681,7 +683,7 @@ namespace RS_Damage
                    UsedAbilities[UsedAbilities.Count - 1].WeaponReq != WeaponRequirement.TwoHand &&   // Last ability can be fired with DualWield
                   !UsedAbilities[UsedAbilities.Count - 1].IsCombo &&                                  // Last ability is not a combo attack
                   (UsedAbilities.Count < 2 || UsedAbilities[UsedAbilities.Count - 2] != null) &&      // Last ability was not fired with an AutoAttack
-                  !UltAvailable() &&                                                                  // Ultimate is not available (should cast it immediately, since it comes with a free AutoAttack)
+                  !UltAvailable() &&                                                                  // Ultimate is not available (should cast the ult immediately, since it comes with a free AutoAttack)
                   !AutoAttackQueued)                                                                  // AutoAttack is not already queued
                {
                   AutoAttackQueued = true;
@@ -698,12 +700,6 @@ namespace RS_Damage
                   }
 
                   UseStrongestAbilityAvailable();
-
-                  // Free AutoAttack with Ults, unless AutoAttack was fired before Ult
-                  if (UsedAbilities[UsedAbilities.Count - 1].Type == AbilityType.Ultimate && UsedAbilities[UsedAbilities.Count - 1] != null)
-                  {
-                     DoAutoAttack();
-                  }
                }
             }
 
@@ -744,6 +740,7 @@ namespace RS_Damage
          OverkillTicksRemaining = 0;
          SunshineTicksRemaining = 0;
          StunnedTicksRemaining = 0;
+         AutoAttackQueued = false;
 
          DamageDealt = 0;
          LastAbilityDamage = 0;
@@ -1033,7 +1030,9 @@ namespace RS_Damage
 
             Cooldown = 100,
 
-            Type = AbilityType.Ultimate
+            Type = AbilityType.Ultimate,
+
+            LosslessAutoAttackExceptAfterCombos = true
          });
       }
    }
